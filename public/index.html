@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>リアルタイムお絵かき</title>
+    <style>
+        .pixel {
+            width: 6px;
+            height: 6px;
+            border: 1px solid #ddd;
+            float: left;
+        }
+        #canvas {
+            display: grid;
+            grid-template-columns: repeat(200, 6px); /* キャンバスのサイズを調整 */
+        }
+    </style>
+</head>
+<body>
+    <input type="color" id="colorPicker" value="#000000">
+    <div id="canvas"></div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const canvas = document.getElementById('canvas');
+        const colorPicker = document.getElementById('colorPicker');
+        let selectedColor = colorPicker.value;
+    
+        // キャンバスグリッドの作成
+        for (let i = 0; i < 200; i++) {
+            for (let j = 0; j < 200; j++) {
+                const pixel = document.createElement('div');
+                pixel.classList.add('pixel');
+                pixel.dataset.x = i;
+                pixel.dataset.y = j;
+            
+                // 左クリック時に描画するイベントリスナー
+                pixel.addEventListener('mousedown', (event) => {
+                    // 左クリックのみを検出 (button === 0 は左クリックを意味する)
+                    if (event.button === 0) {
+                        const x = pixel.dataset.x;
+                        const y = pixel.dataset.y;
+                        const color = selectedColor;
+                        pixel.style.backgroundColor = color;
+                        // ピクセル更新をサーバーに送信
+                        socket.emit('drawPixel', { x, y, color });
+                    }
+                });
+            
+                canvas.appendChild(pixel);
+            }
+        }
+    
+        // カラーピッカーの変更を反映
+        colorPicker.addEventListener('input', (e) => {
+            selectedColor = e.target.value;
+        });
+
+        // サーバーからの更新を受信
+        socket.on('updatePixel', (data) => {
+            const { x, y, color } = data;
+            const pixel = document.querySelector(`.pixel[data-x="${x}"][data-y="${y}"]`);
+            if (pixel) {
+                pixel.style.backgroundColor = color;
+            }
+        });
+
+        // 初期キャンバスの状態をロード
+        socket.on('canvasState', (state) => {
+            Object.keys(state).forEach(key => {
+                const [x, y] = key.split('_');
+                const color = state[key];
+                const pixel = document.querySelector(`.pixel[data-x="${x}"][data-y="${y}"]`);
+                if (pixel) {
+                    pixel.style.backgroundColor = color;
+                }
+            });
+        });
+    </script>
+</body>
+</html>
